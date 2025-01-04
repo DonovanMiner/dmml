@@ -1,0 +1,10 @@
+/.vs
+/DMML
+/x64
+/DMML.sln
+/DMML.vcxproj
+/DMML.vcxproj.filters
+/DMML.vcxproj.user
+/program_files/main.cpp
+/other_implements/first_imp.cpp
+/other_implements/first_imp.h
