@@ -67,7 +67,7 @@ namespace dmml {
 			}
 
 			
-			void UpdateVectorSize() { this->SetVectorSize_(); }
+			void UpdateVectorSize() { this->_UpdateVectorSize(); }
 
 
 
@@ -76,7 +76,7 @@ namespace dmml {
 			//member functions
 			dmml::linalg::Vector<T> AddVector(const dmml::linalg::Vector<T>& v2) const {
 				try {
-					if (this->IsSameSize_(v2)) {
+					if (this->_IsSameSize(v2)) {
 						throw(this->GetVectorSize());
 					}
 				}
@@ -95,14 +95,14 @@ namespace dmml {
 					temp.vec_m.push_back(*iOne + *iTwo);
 					iTwo++;
 				}
-				temp.SetVectorSize_();
+				temp.UpdateVectorSize();
 				return temp;
 			}
 
 
 			dmml::linalg::Vector<T> SubtractVector(const dmml::linalg::Vector<T>& v2) const {  
 				try { //check for 0 length vectors?
-					if (this->IsSameSize_(v2)) {
+					if (this->_IsSameSize(v2)) {
 						throw(this->GetVectorSize());
 					}
 				}
@@ -121,14 +121,14 @@ namespace dmml {
 					temp.vec_m.push_back(*iOne - *iTwo);
 					iTwo++;
 				}
-				temp.SetVectorSize_();
+				temp.UpdateVectorSize();
 				return temp;
 			}
 
 
 			double DotProduct(const dmml::linalg::Vector<T>& v2) const { //may need to make double
 				try {
-					if (this->IsSameSize_(v2)) {
+					if (this->_IsSameSize(v2)) {
 						throw(this->GetVectorSize());
 					}
 					//may need to include exception for type checks
@@ -173,7 +173,7 @@ namespace dmml {
 
 			dmml::linalg::Vector<T> HadamardProduct(const dmml::linalg::Vector<T>& v2) const {
 				try {
-					if (this->IsSameSize_(v2)) {
+					if (this->_IsSameSize(v2)) {
 						throw(this->GetVectorSize());
 					}
 				}
@@ -273,11 +273,11 @@ namespace dmml {
 
 
 			//SETTERS
-			void SetVectorSize_() { this->sizeType_m = this->vec_m.size(); }
+			void _UpdateVectorSize() { this->sizeType_m = this->vec_m.size(); }
 
 
 			//COMPARISONS
-			bool IsSameSize_(const dmml::linalg::Vector<T>& v2) const {
+			bool _IsSameSize(const dmml::linalg::Vector<T>& v2) const {
 				if (this->sizeType_m != v2.sizeType_m) {
 					return true;
 				}
@@ -298,39 +298,44 @@ namespace dmml {
 		class Matrix {
 		public:
 
-			//CONSTRUCTORS
-			template<typename...Ts>
-			Matrix(Ts ...args)
-				//	:rowSize_m(rows), colSize_m(cols) {
-			{
-				unsigned int rows = 2;
-				unsigned int cols = 2;
+			//CONSTRUCTORS - need overloads for lvalue/rvalue args and vector list constructor
+			//in constructors check if T matches Ts
+			Matrix() {}
 
-				((std::cout << args << std::endl), ...);
 
-				//matrix constructor, pack expansion with these to put them in correct
-				//row/col order? do with iterators?
-
-				//std::vector<std::common_type_t<Ts>> tempVec = { args... }; //expand/assign without copying?
-				//matrix_m = std::vector<std::vector<Ts>>(rows);
-				
-				/*auto tempIter = temp.cbegin();
-				for (unsigned int r = 0; r < rows; r++) {
-					for (unsigned int c = 0; c < cols; c++) {
-						matrix_m[r][c] = *tempIter;
-						tempIter++;
-					}
-				}*/
-				
-			}
+			Matrix(unsigned int rows, unsigned int cols)
+				:rowSize_m(static_cast<typename std::vector<T>::size_type>(rows)), colSize_m(static_cast<typename std::vector<T>::size_type>(cols)),
+				  matrix_m(std::vector<std::vector<T>>(rows, std::vector<T>(cols))) {}
 			
 
-			/*Matix(unsigned int rows, unsigned int cols)
-				:rowSize_m(rows), colSize_m(cols) {}*/
+			template <typename ...Ts>
+			Matrix(unsigned int rows, unsigned int cols, Ts...args) 
+				:rowSize_m(static_cast<typename std::vector<T>::size_type>(rows)), colSize_m(static_cast<typename std::vector<T>::size_type>(cols)) {
+				
+				//check T vs Ts types
+				std::vector<T> initList = { { args... } }; //pack expansion but without copying the data?
+				/*for (auto iter : initList) {
+					std::cout << iter << ' ';
+				}*/
+
+				//init matrix_m size
+				matrix_m = std::vector<std::vector<T>>(rows, std::vector<T>(cols));
+
+				typename std::vector<T>::const_iterator initIter = initList.cbegin();
+				for (typename std::vector<std::vector<T>>::iterator rIter = matrix_m.begin(); rIter != matrix_m.end(); rIter++) {
+					for (typename std::vector<T>::iterator cIter = rIter->begin(); cIter != rIter->end(); cIter++) {
+						*cIter = *initIter++;
+					}
+				}
+
+			}
 
 
 
-			void ShowMatrix() const {
+
+
+			//GETTERS
+			void ShowMatrix() const { //CONVERT TO ITERATORS?
 				for (typename std::vector<T>::size_type r = 0; r < this->rowSize_m; r++) {
 					for (typename std::vector<T>::size_type c = 0; c < this->colSize_m; c++) {
 						std::cout << matrix_m[r][c];
@@ -339,6 +344,45 @@ namespace dmml {
 				}
 				std::cout << std::endl;
 			}
+
+
+
+
+
+			//SETTERS
+
+
+
+
+
+			//MEMBERS
+			dmml::linalg::Matrix<T> MatMul(const Matrix& m2) {
+
+				try {
+					if (this->colSize_m != m2->rowSize_m) {
+
+					}
+				}
+				catch (/*const std::exception&*/) {
+
+				}
+
+				auto temp = dmml::linalg::Matrix<T>(this->colSize_m, m2.rowSize_m);
+				typename std::vector<std::vector<T>> tempRIter = temp.begin();
+				typename std::vector<T> tempCIter = tempRIter->begin();
+
+				for (typename std::vector<std::vector<T>>::iterator m1RIter = this->matrix_m.begin(); m1RIter != this->matrix_m.end(); m1RIter++) {
+					typename std::vector<std::vector<T>>::iterator m1CIter = m1RIter->begin();
+
+					for (typename std::vector<std::vector<T>> m2RIter = m2.matrix_m.begin(); m2RIter != m2.matrix_m.end()) {
+							
+					}
+				}
+				return temp;
+			}
+
+
+
 
 
 		private:
