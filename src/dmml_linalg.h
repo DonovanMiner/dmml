@@ -14,18 +14,27 @@
 //adding exception class?
 
 
+//callable type caster
 template <typename From, typename To>
 struct static_caster {
 	To operator()(From i) { return static_cast<To>(i); }
 };
 
 
-template<typename T, template<typename> typename U>
+//matrix type check
+template<typename T, template<typename> typename V>
 bool is_Vector = std::false_type{};
 
-template<template<typename> typename U, typename V>
-bool is_Vector<U<V>, U> = std::true_type{};
+template<template<typename> typename V, typename U>
+bool is_Vector<V<U>, V> = std::true_type{};
 
+
+//matrix type check
+template<typename T, template<typename> typename M>
+bool is_Matrix = std::false_type{};
+
+template<template<typename> typename M, typename U>
+bool is_Matrix<M<U>, M> = std::true_type{};
 
 namespace dmml {
 	namespace linalg {		
@@ -40,7 +49,7 @@ namespace dmml {
 
 			template<typename ...Ts>
 			Vector(Ts...args)
-				:sizeType_m(sizeof...(Ts)), vec_m{args...} {}
+				: sizeType_m(sizeof...(Ts)), vec_m{ args... } {}
 			
 
 			Vector(std::vector<T> list) //test this
@@ -134,8 +143,8 @@ namespace dmml {
 				return retVec;
 			}
 
-			template <typename T2> 
-			double DotProduct(const T2& v2) const { 	
+			template <typename V2> 
+			double DotProduct(const V2& v2) const { 	
 								
 				try {	
 					if (!is_Vector<std::decay_t<const decltype(v2)&>, dmml::linalg::Vector>) { //almost uneccessary?
@@ -146,8 +155,9 @@ namespace dmml {
 						throw(this->GetVectorSize());
 					}
 				}
-				catch (const std::bad_typeid& typeErr) {
-					typeErr.what();
+				catch (const std::bad_typeid&) {
+					std::cout << "Type Error" << std::endl;
+					return std::numeric_limits<double>::min();
 				}
 				catch (const typename std::vector<T>::size_type&) {
 					std::cout << "Vectors are of differing dimensions. Invoked vector of length " <<
@@ -304,13 +314,13 @@ namespace dmml {
 			Matrix() {}
 
 			
-			Matrix(unsigned int rows, unsigned int cols)
+			Matrix(uint64_t rows, uint64_t cols)
 				:rowSize_m(static_cast<typename std::vector<T>::size_type>(rows)), colSize_m(static_cast<typename std::vector<T>::size_type>(cols)),
 				  matrix_m(std::vector<std::vector<T>>(rows, std::vector<T>(cols))) {}
 			
 
-			template <typename ...Ts>
-			Matrix(unsigned int rows, unsigned int cols, Ts...args) 
+			template <typename...Ts>
+			Matrix(uint64_t rows, uint64_t cols, Ts...args) 
 				:rowSize_m(static_cast<typename std::vector<T>::size_type>(rows)), colSize_m(static_cast<typename std::vector<T>::size_type>(cols)) {
 				
 				//check T vs Ts types
@@ -340,7 +350,7 @@ namespace dmml {
 				//std::cout << '[';
 				for (typename std::vector<T>::size_type r = 0; r < this->rowSize_m; r++) {
 					for (typename std::vector<T>::size_type c = 0; c < this->colSize_m; c++) {
-						std::cout << matrix_m[r][c] << ' ';
+						std::cout << ' ' << matrix_m[r][c] << ' ';
 					}
 					std::cout << '\n';
 				}
@@ -359,44 +369,47 @@ namespace dmml {
 
 
 			//MEMBERS
-			//dmml::linalg::Matrix<T> MatMul(const Matrix& m2) {
+			template<typename M2>
+			dmml::linalg::Matrix<T> MatMul(const M2& m2) {
 
-			//	//try {
-			//	//	if (this->colSize_m != m2->rowSize_m) {
+				try {
+					if (!is_Matrix<std::decay_t<const decltype(m2)&>, dmml::linalg::Matrix>) {
+						throw(typeid(m2).name());
+					}
 
-			//	//	}
-			//	//}
-			//	//catch (/*const std::exception&*/) {
+					if (this->colSize_m != m2.rowSize_m) {
+						throw(this->colSize_m); //change to get col size method
+					}
+				}
+				catch (const std::bad_typeid&) {
+					std::cout << "Improper type passed." << std::endl;
+				}
+				catch (typename std::vector<T>::size_type) {
+					std::cout << "Matrices of differing sizes." << std::endl;
+					return dmml::linalg::Matrix<T>((T)1, (T)1, (T)1);
+				}
+				 
+				//better wat to infer type?
+				auto retMat = dmml::linalg::Matrix<decltype(this->matrix_m[0][0] * m2.matrix_m[0][0])>(this->colSize_m, m2.rowSize_m);
+				decltype(this->matrix_m[0][0] * m2.matrix_m[0][0]) temp = 0;
 
-			//	//}
-
-			//	auto retMat = dmml::linalg::Matrix<T>(this->colSize_m, m2.rowSize_m);
-			//	unsigned int m1R = 0;
-			//	unsigned int m1C = 0;
-			//	unsigned int m2R = 0;
-			//	unsigned int m2C = 0;
-			//	decltype(this->matrix_m[m1R][m1C] * m2.matrix_m[m2R][m2C]) temp = 0;
-			//	std::cout << "Sizes: " << this->rowSize_m << ' ' << this->colSize_m << ' ' << m2.rowSize_m << ' ' << m2.colSize_m << std::endl;
-			//	for (m1R; m1R < this->rowSize_m; m1R++) {
-			//		
-			//		for (m1C; m1C < this->colSize_m; m1C++) {	 
-			//			std::cout << "Row " << m1R << " Col: " << m1C << '\n';
-			//			temp = 0;
-			//			for (m2C; m2C < m2.colSize_m; m2C++) {
-
-			//				for (m2R; m2C < m2.rowSize_m; m2C++) {
-			//					std::cout << "m2Row " << m2R << " m2Col: " << m2C << '\n';
-			//					temp += this->matrix_m[m1R][m1C] * m2.matrix_m[m2R][m2C];
-			//				}
-			//			}
-			//		}
-			//		retMat.matrix_m[m1R][m2C] = temp;
-			//	}
-			//	return retMat;
-			//}
+				for (uint64_t m1R = 0; m1R < this->rowSize_m; m1R++) {
+					for (uint64_t m2C = 0; m2C < m2.colSize_m; m2C++) {
+						uint64_t m2R = 0;
+						temp = 0;
+						for (uint64_t m1C = 0; m1C < this->colSize_m; m1C++) {
+							temp += this->matrix_m[m1R][m1C] * m2.matrix_m[m2R][m2C];
+							m2R++;
+						}
+						m2R = 0;
+						retMat.matrix_m[m1R][m2C] = temp;
+					}
+				}
+				return retMat;
+			}
 
 
-			dmml::linalg::Matrix<double> IdentityMatrix(const unsigned int&& size) {
+			dmml::linalg::Matrix<double> IdentityMatrix(const uint64_t&& size) {
 
 				auto idMatrix = dmml::linalg::Matrix<double>(size, size);
 				for (auto rIter = idMatrix.matrix_m.begin(); rIter != idMatrix.matrix_m.end(); rIter++) {
