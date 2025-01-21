@@ -38,13 +38,6 @@ template<template<typename> typename M, typename U>
 bool is_Matrix<M<U>, M> = std::true_type{};
 
 
-//vector common type
-template <class T, class T2>
-struct common_type
-{
-	using type = std::decay_t< decltype(true ? std::declval< std::decay_t<T> >() : std::declval< std::decay_t<T2> >()) >;
-};
-
 //--------------------MAKE GETTER MEMBER FUNCTIONS TO MAKE TEMPLATED CLASSES WORK ACROSS TYPES-----------------------
 //change/check decltypes of derived vectors/matrices
 //constructor for vector/matrix for single value to fill whole entity
@@ -136,7 +129,6 @@ namespace dmml {
 			
 			std::vector<T> GetValues() const { return this->vec_m; }
 
-			//typename std::vector<T>::value_type GetType() const { return this->valType }
 
 			void ShowVector() const {
 				//display type as well?
@@ -463,7 +455,6 @@ namespace dmml {
 
 			 typename std::vector<T>::size_type GetColSize() const { return this->colSize_m; }
 
-			 typename std::vector<T>::value_type GetType() const { return std::vector<T>::value_type; }
 
 			void ShowMatrix() const { //CONVERT TO ITERATORS?
 				//std::cout << '[';
