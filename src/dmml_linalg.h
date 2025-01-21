@@ -1,6 +1,7 @@
 //#pragma once
 
 #include <vector>
+#include <mutex>
 #include <cmath>
 #include <cstdarg>
 #include <utility>
@@ -21,7 +22,7 @@ struct static_caster {
 };
 
 
-//matrix type check
+//vector type check
 template<typename T, template<typename> typename V>
 bool is_Vector = std::false_type{};
 
@@ -36,6 +37,67 @@ bool is_Matrix = std::false_type{};
 template<template<typename> typename M, typename U>
 bool is_Matrix<M<U>, M> = std::true_type{};
 
+
+//vector common type
+template <class T, class T2>
+struct common_type
+{
+	using type = std::decay_t< decltype(true ? std::declval< std::decay_t<T> >() : std::declval< std::decay_t<T2> >()) >;
+};
+
+//--------------------MAKE GETTER MEMBER FUNCTIONS TO MAKE TEMPLATED CLASSES WORK ACROSS TYPES-----------------------
+//change/check decltypes of derived vectors/matrices
+//constructor for vector/matrix for single value to fill whole entity
+//std::common type for deriving types of vector/matrix operations
+
+
+
+//template<typename T, const size_t MAX_SIZE>
+//class VectorStackCalloc {
+//
+//public:
+//	typedef T				  value_type;
+//	typedef value_type*       pointer;
+//	typedef const value_type* const_pointer;
+//	typedef value_type&		  reference;
+//	typedef const value_type& const_reference;
+//	typedef std::size_t		  size_type;
+//	typedef std::ptrdiff_t    difference_type;
+//
+//
+//	/*enum {
+//		NUMBER_OF_BUFFERS
+//	};*/
+//
+//
+//	VectorCalloc() 
+//		: buffer_id(0) {}
+//
+//
+//	template<typename U>
+//	struct rebind {
+//		typedef VectorCalloc<U, MAX_SIZE> other;
+//	};
+//
+//
+//	
+//
+//
+//private:
+//
+//	int buffer_id;
+//
+//};
+
+
+
+
+
+
+
+
+
+
 namespace dmml {
 	namespace linalg {		
 
@@ -43,17 +105,26 @@ namespace dmml {
 		class Vector {
 		public:
 
+
 			//CONSTRUCTORS
-			Vector() 
-				:sizeType_m(0), vec_m() {}
+			Vector()
+				:sizeType_m(0), vec_m{} {
+				//std::cout << "Constructor 1" << std::endl;
+			}
+	
 
 			template<typename ...Ts>
 			Vector(Ts...args)
-				: sizeType_m(sizeof...(Ts)), vec_m{ args... } {}
-			
+				: sizeType_m(sizeof...(Ts)), vec_m{ args... } {
+				//std::cout << "Constructor 2" << std::endl;
+			}
 
+
+			template<typename T>
 			Vector(std::vector<T> list) //test this
-				:sizeType_m(list.size()), vec_m(list) {} 
+				: sizeType_m(list.size()), vec_m(list) {
+				//std::cout << "Constructor 3" << std::endl;
+			}
 			//maybe add pass by reference? etc.			
 
 
@@ -61,11 +132,11 @@ namespace dmml {
 
 			
 			//GETTERS
-			typename std::vector<T>::size_type GetVectorSize() const { return this->sizeType_m; }
+			typename std::vector<T>::size_type GetSize() const { return this->sizeType_m; }
+			
+			std::vector<T> GetValues() const { return this->vec_m; }
 
-
-			std::vector<T> GetVector() const { return this->vec_m; }
-
+			//typename std::vector<T>::value_type GetType() const { return this->valType }
 
 			void ShowVector() const {
 				//display type as well?
@@ -85,74 +156,92 @@ namespace dmml {
 			//SETTERS
 			void UpdateVectorSize() { this->_UpdateVectorSize(); }
 
-
 			void PushBack(T val) { this->vec_m.push_back(val); }
 
 
 
 
 			//member functions
-			dmml::linalg::Vector<T> AddVector(const dmml::linalg::Vector<T>& v2) const {
+			template<typename T2>
+			auto AddVector(const dmml::linalg::Vector<T2>* const v2) const {
+
+				using dervType = typename std::common_type<T, T2>::type;
+
 				try {
-					if (this->_IsSameSize(v2)) {
-						throw(this->GetVectorSize());
+					if (this->sizeType_m != v2->GetSize()) {
+						throw(this->GetSize());
 					}
 				}
-				catch (typename std::vector<T>::size_type) {
+				catch (typename std::vector<dervType>::size_type) {
 					std::cout << "Vectors are of differing dimensions. Invoked vector of length " <<
-						this->GetVectorSize() << " and passed vector of length " << v2.GetVectorSize() << '.' << std::endl;
+						this->GetSize() << " and passed vector of length " << v2->GetSize() << '.' << std::endl;
 					
-					return dmml::linalg::Vector<T>();
+					return dmml::linalg::Vector<dervType>();
 				}
 
 				typename std::vector<T>::const_iterator iOne = this->vec_m.cbegin();
-				typename std::vector<T>::const_iterator iTwo = v2.vec_m.cbegin();	
-				auto retVec = dmml::linalg::Vector<decltype(*iOne + *iTwo)>(); //could store first value instead of recomputing
+				auto v2Vec = v2->GetValues();
+				auto iTwo = v2Vec.cbegin();	
+				auto retVec = dmml::linalg::Vector<dervType>();
 
 				for (iOne; iOne != this->vec_m.cend(); iOne++) {
-					retVec.vec_m.push_back(*iOne + *iTwo);
+					retVec.PushBack(*iOne + *iTwo);
 					iTwo++;
 				}
 				retVec.UpdateVectorSize();
 				return retVec;
 			}
 
+			
+			template <typename T2>
+			auto SubtractVector(const dmml::linalg::Vector<T2>* const v2) const {  
 
-			dmml::linalg::Vector<T> SubtractVector(const dmml::linalg::Vector<T>& v2) const {  
+				using dervType = typename std::common_type<T, T2>::type;
+
 				try { //check for 0 length vectors?
-					if (this->_IsSameSize(v2)) {
-						throw(this->GetVectorSize());
+					if (!is_Vector<std::decay_t<decltype(*v2)>, dmml::linalg::Vector>) { //almost uneccessary?
+						throw(typeid(v2).name());
 					}
+
+					if (this->sizeType_m != v2->GetSize()) {
+						throw(this->GetSize());
+					}
+				}
+				catch (const std::bad_typeid&) {
+					std::cout << "Type Error" << std::endl;
+					return dmml::linalg::Vector<dervType>((dervType)1);
 				}
 				catch (typename std::vector<T>::size_type) {
 					std::cout << "Vectors are of differing dimensions. Invoked vector of length " <<
-						this->GetVectorSize() << " and passed vector of length " << v2.GetVectorSize() << '.' << std::endl;
+						this->GetSize() << " and passed vector of length " << v2->GetSize() << '.' << std::endl;
 					
-					return dmml::linalg::Vector<T>();
+					return dmml::linalg::Vector<dervType>((dervType)1);
 				}
 	
 				typename std::vector<T>::const_iterator iOne = this->vec_m.cbegin();
-				typename std::vector<T>::const_iterator iTwo = v2.vec_m.cbegin();
-				auto retVec = dmml::linalg::Vector<decltype(*iOne + *iTwo)>(); //could store first value instead of recomputing, checking indexes tho
+				auto v2Vec = v2->GetValues();
+				auto iTwo = v2Vec.cbegin();
+				auto retVec = dmml::linalg::Vector<dervType>(); //could store first value instead of recomputing, checking indexes tho
 
 				for (iOne; iOne != this->vec_m.cend(); iOne++) {
-					retVec.vec_m.push_back(*iOne - *iTwo);
+					retVec.PushBack(*iOne - *iTwo);
 					iTwo++;
 				}
 				retVec.UpdateVectorSize();
 				return retVec;
 			}
 
+
 			template <typename V2> 
-			double DotProduct(const V2& v2) const { 	
+			double DotProduct(const V2* const v2) const { 	
 								
 				try {	
-					if (!is_Vector<std::decay_t<const decltype(v2)&>, dmml::linalg::Vector>) { //almost uneccessary?
+					if (!is_Vector<std::decay_t<decltype(*v2)>, dmml::linalg::Vector>) { //almost uneccessary?
 						throw(typeid(v2).name());
 					}
 					
-					if (this->_IsSameSize(v2)) {
-						throw(this->GetVectorSize());
+					if (this->sizeType_m != v2->GetSize()) {
+						throw(this->GetSize());
 					}
 				}
 				catch (const std::bad_typeid&) {
@@ -161,15 +250,16 @@ namespace dmml {
 				}
 				catch (const typename std::vector<T>::size_type&) {
 					std::cout << "Vectors are of differing dimensions. Invoked vector of length " <<
-						this->GetVectorSize() << " and passed vector of length " << v2.GetVectorSize() << '.' << std::endl;
+						this->GetSize() << " and passed vector of length " << v2->GetSize() << '.' << std::endl;
 					
 					return std::numeric_limits<double>::min();
 				}
 
 				typename std::vector<T>::const_iterator iOne = this->vec_m.cbegin();
-				auto iTwo = v2.vec_m.cbegin();
+				auto v2Vals = v2->GetValues();
+				auto iTwo = v2Vals.cbegin();
+
 				double dProd = 0.0;
-				
 				for (iOne; iOne != this->vec_m.cend(); iOne++) {
 					dProd += *iOne * *iTwo;
 					iTwo++;
@@ -180,8 +270,8 @@ namespace dmml {
 
 			double L2Norm() const {
 				try {
-					if (this->GetVectorSize() == 0) {
-						throw(this->GetVectorSize());
+					if (this->GetSize() == 0) {
+						throw(this->GetSize());
 					}
 				}
 				catch (typename std::vector<T>::size_type) {
@@ -197,33 +287,47 @@ namespace dmml {
 			}
 
 
-			dmml::linalg::Vector<T> HadamardProduct(const dmml::linalg::Vector<T>& v2) const {
+			template<typename T2>
+			auto HadamardProduct(const dmml::linalg::Vector<T2>*const v2) const {
+
+				using dervType = typename std::common_type<T, T2>::type;
+
 				try {
-					if (this->_IsSameSize(v2)) {
-						throw(this->GetVectorSize());
+					if (!is_Vector<std::decay_t<decltype(*v2)>, dmml::linalg::Vector>) { //almost uneccessary?
+						throw(typeid(v2).name());
 					}
+
+					if (this->sizeType_m != v2->GetSize()) {
+						throw(this->GetSize());
+					}
+				}
+				catch (const std::bad_typeid&) {
+					std::cout << "Type Error" << std::endl;
+					return dmml::linalg::Vector<dervType>((dervType)1);
 				}
 				catch (typename std::vector<T>::size_type) {
 					std::cout << "Vectors of differing sizes" << std::endl;
-					return dmml::linalg::Vector<T>();
+					return dmml::linalg::Vector<dervType>((dervType)1);
 				}
 
 				typename std::vector<T>::const_iterator iOne = this->vec_m.cbegin();
-				typename std::vector<T>::const_iterator iTwo = v2.vec_m.cbegin();
-				auto retVec = dmml::linalg::Vector<decltype(this->vec_m[0] * v2.vec_m[0])>();
+				auto v2Vals = v2->GetValues();
+				auto iTwo = v2Vals.cbegin();
+				auto retVec = dmml::linalg::Vector<dervType>();	
 
 				for (iOne; iOne != this->vec_m.cend(); iOne++) {
-					retVec.vec_m.push_back(*iOne * *iTwo);
+					retVec.PushBack(*iOne * *iTwo);
 					iTwo++;
 				}
+				retVec.UpdateVectorSize();
 				return retVec;
 			}
 
 
 			dmml::linalg::Vector<double> ConvertUnitVector() const  {
 				try {
-					if (this->GetVectorSize() == 0) {
-						throw(this->GetVectorSize());
+					if (this->GetSize() == 0) {
+						throw(this->GetSize());
 					}
 				}
 				catch (typename std::vector<T>::size_type) {
@@ -232,7 +336,7 @@ namespace dmml {
 				}
 
 				double vecNorm = this->L2Norm();
-				dmml::linalg::Vector<double> retVec = dmml::linalg::Vector<double>();
+				auto retVec = dmml::linalg::Vector<double>();
 				
 				for (auto iter = this->vec_m.cbegin(); iter != this->vec_m.cend(); iter++) {
 					retVec.PushBack(static_cast<double>(*iter) / vecNorm);
@@ -242,10 +346,10 @@ namespace dmml {
 			}
 
 
-			dmml::linalg::Vector<double> ConvertUnitVector(dmml::linalg::Vector<double>& unit) const {
+			dmml::linalg::Vector<double> ConvertUnitVector(dmml::linalg::Vector<double>& unit) const { //change overload/const
 				try {
-					if (this->GetVectorSize() == 0) {
-						throw(this->GetVectorSize());
+					if (this->GetSize() == 0) {
+						throw(this->GetSize());
 					} 
 				}
 				catch (typename std::vector<T>::size_type) {
@@ -279,6 +383,7 @@ namespace dmml {
 		private:
 	
 			//MEMBER VALUES
+			using valType_m = typename std::vector<T>::value_type;
 			typename std::vector<T>::size_type sizeType_m { 0 };
 			std::vector<T> vec_m {};
 
@@ -288,19 +393,25 @@ namespace dmml {
 
 
 			//COMPARISONS
-			bool _IsSameSize(const dmml::linalg::Vector<T>& v2) const {
-				if (this->sizeType_m != v2.sizeType_m) {
+			/*bool _IsSameSize(const dmml::linalg::Vector<T>& v2) const {
+				if (this->sizeType_m == v2.GetSize()) {
 					return true;
 				}
 				else {
 					return false;
 				}
-			}	
+			}*/	
 
 
 			//OPERATORS
 
 		};
+
+
+
+
+
+
 
 
 
@@ -346,6 +457,14 @@ namespace dmml {
 
 
 			//GETTERS
+			 std::vector<std::vector<T>> GetValues() const { return this->matrix_m; }
+
+			 typename std::vector<std::vector<T>>::size_type GetRowSize() const { return this->rowSize_m; }
+
+			 typename std::vector<T>::size_type GetColSize() const { return this->colSize_m; }
+
+			 typename std::vector<T>::value_type GetType() const { return std::vector<T>::value_type; }
+
 			void ShowMatrix() const { //CONVERT TO ITERATORS?
 				//std::cout << '[';
 				for (typename std::vector<T>::size_type r = 0; r < this->rowSize_m; r++) {
@@ -370,14 +489,14 @@ namespace dmml {
 
 			//MEMBERS
 			template<typename M2>
-			dmml::linalg::Matrix<T> MatMul(const M2& m2) {
+			dmml::linalg::Matrix<T> MatMul(const M2& m2) const {
 
 				try {
 					if (!is_Matrix<std::decay_t<const decltype(m2)&>, dmml::linalg::Matrix>) {
 						throw(typeid(m2).name());
 					}
 
-					if (this->colSize_m != m2.rowSize_m) {
+					if (this->colSize_m != m2.GetRowSize()) {
 						throw(this->colSize_m); //change to get col size method
 					}
 				}
@@ -389,12 +508,13 @@ namespace dmml {
 					return dmml::linalg::Matrix<T>((T)1, (T)1, (T)1);
 				}
 				 
-				//better wat to infer type?
-				auto retMat = dmml::linalg::Matrix<decltype(this->matrix_m[0][0] * m2.matrix_m[0][0])>(this->colSize_m, m2.rowSize_m);
-				decltype(this->matrix_m[0][0] * m2.matrix_m[0][0]) temp = 0;
+				//---------------better wat to infer type?
+				std::cout << typeid(std::common_type<std::vector<int>::value_type, std::vector<double>::value_type>).name() << std::endl;
+				auto retMat = dmml::linalg::Matrix<std::common_type<>>(this->colSize_m, m2.rowSize_m);
+				std::common_type<this->GetType(), m2.GetType()> temp = 0;
 
 				for (uint64_t m1R = 0; m1R < this->rowSize_m; m1R++) {
-					for (uint64_t m2C = 0; m2C < m2.colSize_m; m2C++) {
+					for (uint64_t m2C = 0; m2C < m2.GetColSize(); m2C++) {
 						uint64_t m2R = 0;
 						temp = 0;
 						for (uint64_t m1C = 0; m1C < this->colSize_m; m1C++) {
@@ -409,7 +529,13 @@ namespace dmml {
 			}
 
 
-			dmml::linalg::Matrix<double> IdentityMatrix(const uint64_t&& size) {
+			void MatMul_(const int64_t&& scalar) {
+
+
+			}
+
+
+			dmml::linalg::Matrix<double> IdentityMatrix(const uint64_t&& size) const { //change type on identity matrix to be more flexible? template?
 
 				auto idMatrix = dmml::linalg::Matrix<double>(size, size);
 				for (auto rIter = idMatrix.matrix_m.begin(); rIter != idMatrix.matrix_m.end(); rIter++) {
@@ -426,14 +552,30 @@ namespace dmml {
 			}
 
 
+			dmml::linalg::Matrix<T> MoorePenrosePseudoinverse() const {
+
+				//single value decomposition
+				//eigen decomp
+				//inverse and transpose D+
+				//multiply for pseudoinv
 
 
+			}
+
+
+
+
+			//OPERATORS
+			//dmml::linalg::Matrix<T> operator= (const Matrix<T>& m) 
+				
 		private:
 
 			//MEMBER VALUES
 			typename std::vector<std::vector<T>>::size_type rowSize_m {};
 			typename std::vector<T>::size_type colSize_m {};
 			std::vector<std::vector<T>> matrix_m {};
+
+			//need destructor, copy constructor, and copy assignment operator
 
 
 		};
