@@ -42,9 +42,14 @@ bool is_Matrix<M<U>, M> = std::true_type{};
 //change/check decltypes of derived vectors/matrices
 //constructor for vector/matrix for single value to fill whole entity
 //std::common type for deriving types of vector/matrix operations
+//change vector <T>PushBack to private only?
+//update try/catch type and size checks to some sort of function
 
 
 
+
+
+//std::vector static allocator
 //template<typename T, const size_t MAX_SIZE>
 //class VectorStackCalloc {
 //
@@ -449,7 +454,7 @@ namespace dmml {
 
 
 			//GETTERS
-			 std::vector<std::vector<T>> GetValues() const { return this->matrix_m; }
+			 typename std::vector<std::vector<T>> GetValues() const { return this->matrix_m; }
 
 			 typename std::vector<std::vector<T>>::size_type GetRowSize() const { return this->rowSize_m; }
 
@@ -473,21 +478,42 @@ namespace dmml {
 
 
 			//SETTERS
+			void AssignElement(uint64_t row, uint64_t col, T val) {
+				this->matrix_m[row][col] = val;
+			}
 
 
 
 
 
 			//MEMBERS
-			template<typename M2>
-			dmml::linalg::Matrix<T> MatMul(const M2& m2) const {
+			void Transpose() {
+				
+				auto retMat = std::vector<std::vector<T>>(this->colSize_m, std::vector<T>(this->rowSize_m));
+
+				for (uint64_t oldRow = 0; oldRow < this->rowSize_m; oldRow++) {
+					auto tempRow = this->matrix_m[oldRow];
+					
+					for (uint64_t newCol = 0; newCol < this->rowSize_m; newCol++) {
+						retMat[newCol][oldRow] = tempRow[newCol];
+					}
+				}
+				this->matrix_m = retMat;
+				_UpdateMatrixSize();
+			}
+
+
+			template<typename T2>
+			auto MatMul(const dmml::linalg::Matrix<T2>* const m2) const {
+
+				using dervType = typename std::common_type<T, T2>::type;
 
 				try {
-					if (!is_Matrix<std::decay_t<const decltype(m2)&>, dmml::linalg::Matrix>) {
-						throw(typeid(m2).name());
+					if (!is_Matrix<std::decay_t<decltype(*m2)>, dmml::linalg::Matrix>) {
+						throw(typeid(*m2).name());
 					}
 
-					if (this->colSize_m != m2.GetRowSize()) {
+					if (this->colSize_m != m2->GetRowSize()) {
 						throw(this->colSize_m); //change to get col size method
 					}
 				}
@@ -496,29 +522,28 @@ namespace dmml {
 				}
 				catch (typename std::vector<T>::size_type) {
 					std::cout << "Matrices of differing sizes." << std::endl;
-					return dmml::linalg::Matrix<T>((T)1, (T)1, (T)1);
+					return dmml::linalg::Matrix<dervType>(1, 1, (dervType)1);
 				}
 				 
-				//---------------better wat to infer type?
-				std::cout << typeid(std::common_type<std::vector<int>::value_type, std::vector<double>::value_type>).name() << std::endl;
-				auto retMat = dmml::linalg::Matrix<std::common_type<>>(this->colSize_m, m2.rowSize_m);
-				std::common_type<this->GetType(), m2.GetType()> temp = 0;
+				auto retMat = dmml::linalg::Matrix<dervType>(this->colSize_m, m2->GetRowSize());
+				auto m2Matrix = m2->GetValues();
+				dervType temp = 0;
 
 				for (uint64_t m1R = 0; m1R < this->rowSize_m; m1R++) {
-					for (uint64_t m2C = 0; m2C < m2.GetColSize(); m2C++) {
+					for (uint64_t m2C = 0; m2C < m2->GetColSize(); m2C++) {
 						uint64_t m2R = 0;
 						temp = 0;
 						for (uint64_t m1C = 0; m1C < this->colSize_m; m1C++) {
-							temp += this->matrix_m[m1R][m1C] * m2.matrix_m[m2R][m2C];
+							temp += this->matrix_m[m1R][m1C] * m2Matrix[m2R][m2C];
 							m2R++;
 						}
 						m2R = 0;
-						retMat.matrix_m[m1R][m2C] = temp;
+						retMat.AssignElement(m1R, m2C, temp);
 					}
 				}
 				return retMat;
 			}
-
+			
 
 			void MatMul_(const int64_t&& scalar) {
 
@@ -543,7 +568,7 @@ namespace dmml {
 			}
 
 
-			dmml::linalg::Matrix<T> MoorePenrosePseudoinverse() const {
+			dmml::linalg::Matrix<T> MoorePenrosePseudoInverse() const {
 
 				//single value decomposition
 				//eigen decomp
@@ -558,6 +583,7 @@ namespace dmml {
 
 			//OPERATORS
 			//dmml::linalg::Matrix<T> operator= (const Matrix<T>& m) 
+
 				
 		private:
 
@@ -568,6 +594,12 @@ namespace dmml {
 
 			//need destructor, copy constructor, and copy assignment operator
 
+
+			//SETTERS
+			void _UpdateMatrixSize() {
+				this->colSize_m = this->matrix_m.size();
+				this->rowSize_m = this->matrix_m[0].size();
+			}
 
 		};
 	}
