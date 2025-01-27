@@ -551,9 +551,9 @@ namespace dmml {
 			}
 
 
-			dmml::linalg::Matrix<double> IdentityMatrix(const uint64_t&& size) const { //change type on identity matrix to be more flexible? template?
+			dmml::linalg::Matrix<T> IdentityMatrix(const uint64_t&& size) const { //change type on identity matrix to be more flexible? template?
 
-				auto idMatrix = dmml::linalg::Matrix<double>(size, size);
+				auto idMatrix = dmml::linalg::Matrix<T>(size, size);
 				for (auto rIter = idMatrix.matrix_m.begin(); rIter != idMatrix.matrix_m.end(); rIter++) {
 					for (auto cIter = rIter->begin(); cIter != rIter->end(); cIter++) {
 						if (std::distance(idMatrix.matrix_m.begin(), rIter) == std::distance(rIter->begin(), cIter)) {
@@ -568,8 +568,25 @@ namespace dmml {
 			}
 
 
+			void EigenDecomposition(const dmml::linalg::Matrix<T>* const matrix) const {
+
+			}
+
+			
+			void SingleValueDecomposition(const dmml::linalg::Matrix<T>* const matrix) const {
+				
+				//U - left singular vectors
+				//V - right singular vectors
+				//D - singular values
+				
+				//auto U =  
+
+			}
+
+
 			dmml::linalg::Matrix<T> MoorePenrosePseudoInverse() const {
 
+				SingleValueDecomposition(this);
 				//single value decomposition
 				//eigen decomp
 				//inverse and transpose D+
@@ -577,6 +594,19 @@ namespace dmml {
 
 
 			}
+
+
+			auto Determinant() {
+			
+				if (this->rowSize_m == this->colSize_m) {
+					_SquareDeterminant(this);
+				}
+				else {
+					_EigenDeterminant(this);
+				}
+			
+			}
+
 
 
 
@@ -600,6 +630,12 @@ namespace dmml {
 				this->colSize_m = this->matrix_m.size();
 				this->rowSize_m = this->matrix_m[0].size();
 			}
+
+
+
+
+
+			//PRIVATE MEMBER FUNCS
 
 		};
 	}
