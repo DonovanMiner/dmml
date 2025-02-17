@@ -1,5 +1,8 @@
 #pragma once
 
+#include "cuda_runtime.h"
+#include "device_launch_parameters.h"
+
 #include <vector>
 #include <mutex>
 #include <cmath>
@@ -9,7 +12,6 @@
 #include <iostream>
 #include <climits>
 #include <exception>
-
 #include <cassert>
 
 //adding exception class?
@@ -88,16 +90,17 @@ bool is_Matrix<M<U>, M> = std::true_type{};
 //};
 
 
-
-
-
-
-
+//KERNELS
+template <typename T>
+__global__ void AddVectorKernel(T* c, T* a, T* b) {
+	int i = threadIdx.x;
+	c[i] = a[i] + b[i];
+}
 
 
 
 namespace dmml {
-	namespace linalg {		
+	namespace linalg {
 
 		template <typename T>
 		class Vector {
@@ -109,7 +112,7 @@ namespace dmml {
 				:sizeType_m(0), vec_m{} {
 				//std::cout << "Constructor 1" << std::endl;
 			}
-	
+
 
 			template<typename ...Ts>
 			Vector(Ts...args)
@@ -128,10 +131,10 @@ namespace dmml {
 
 
 
-			
+
 			//GETTERS
 			typename std::vector<T>::size_type GetSize() const { return this->sizeType_m; }
-			
+
 			std::vector<T> GetValues() const { return this->vec_m; }
 
 
@@ -172,13 +175,13 @@ namespace dmml {
 				catch (typename std::vector<dervType>::size_type) {
 					std::cout << "Vectors are of differing dimensions. Invoked vector of length " <<
 						this->GetSize() << " and passed vector of length " << v2->GetSize() << '.' << std::endl;
-					
+
 					return dmml::linalg::Vector<dervType>();
 				}
 
 				typename std::vector<T>::const_iterator iOne = this->vec_m.cbegin();
 				auto v2Vec = v2->GetValues();
-				auto iTwo = v2Vec.cbegin();	
+				auto iTwo = v2Vec.cbegin();
 				auto retVec = dmml::linalg::Vector<dervType>();
 
 				for (iOne; iOne != this->vec_m.cend(); iOne++) {
@@ -189,9 +192,96 @@ namespace dmml {
 				return retVec;
 			}
 
-			
+
+			//template <typename T2>
+			cudaError_t AddVectorCUDA(const dmml::linalg::Vector<T>* const v2, dmml::linalg::Vector<T>* const v3) {
+				//look at type deduction with cuda and third type? deduce function and constructor?
+				cudaError_t cudaStatus;
+				T* dev_a = 0;
+				T* dev_b = 0;
+				T* dev_c = 0;
+
+				//go through device error checking etc. at beginning of function? (necessary for all funcitons?)
+
+				//call priv funciton 
+				cudaStatus = cudaSetDevice(0);
+				if (cudaStatus != cudaSuccess) {
+					fprintf(stderr, "cudaSetDevice failed!  Do you have a CUDA-capable GPU installed?");
+					goto Error;
+				}
+
+				//invoking obj allocation
+				cudaStatus = cudaMalloc((void**)&dev_a, (unsigned int)this->GetSize() * sizeof(T));
+				if (cudaStatus != cudaSuccess) {
+					fprintf(stderr, "cudaMalloc failed!");
+					goto Error;
+				}
+				//2nd vec/first param allocation
+				cudaStatus = cudaMalloc((void**)&dev_b, (unsigned int)v2->GetSize() * sizeof(T));
+				if (cudaStatus != cudaSuccess) {
+					fprintf(stderr, "cudaMalloc failed!");
+					goto Error;
+				}
+				//operand vec/2nd param allocation
+				cudaStatus = cudaMalloc((void**)&dev_c, (unsigned int)v3->GetSize() * sizeof(T));
+				if (cudaStatus != cudaSuccess) {
+					fprintf(stderr, "cudaMalloc failed!");
+					goto Error;
+				}
+
+				//std::vector<T> v1Temp = this->GetValues();
+				//std::vector<T> v2Temp = v2->GetValues();
+
+				cudaStatus = cudaMemcpy(dev_a, &this->vec_m[0], (unsigned int)this->GetSize() * sizeof(T), cudaMemcpyHostToDevice);
+				if (cudaStatus != cudaSuccess) {
+					fprintf(stderr, "cudaMemcpy failed!");
+					goto Error;
+				}
+
+				cudaStatus = cudaMemcpy(dev_b, &v2->vec_m[0], (unsigned int)v2->GetSize() * sizeof(T), cudaMemcpyHostToDevice);
+				if (cudaStatus != cudaSuccess) {
+					fprintf(stderr, "cudaMemcpy failed!");
+					goto Error;
+				}
+
+				
+				AddVectorKernel <<<1, (unsigned int)this->GetSize() >>> (dev_c, dev_a, dev_b);
+
+				// Check for any errors launching the kernel
+				cudaStatus = cudaGetLastError();
+				if (cudaStatus != cudaSuccess) {
+					fprintf(stderr, "addKernel launch failed: %s\n", cudaGetErrorString(cudaStatus));
+					goto Error;
+				}
+
+				// cudaDeviceSynchronize waits for the kernel to finish, and returns
+				// any errors encountered during the launch.
+				cudaStatus = cudaDeviceSynchronize();
+				if (cudaStatus != cudaSuccess) {
+					fprintf(stderr, "cudaDeviceSynchronize returned error code %d after launching addKernel!\n", cudaStatus);
+					goto Error;
+				}
+
+				// Copy output vector from GPU buffer to host memory.
+				cudaStatus = cudaMemcpy(&v3->vec_m[0], dev_c, (unsigned int)v3->GetSize() * sizeof(T), cudaMemcpyDeviceToHost);
+				if (cudaStatus != cudaSuccess) {
+					fprintf(stderr, "cudaMemcpy failed!");
+					goto Error;
+				}
+
+			Error:
+				cudaFree(dev_c);
+				cudaFree(dev_a);
+				cudaFree(dev_b);
+
+
+
+				return cudaStatus;
+			}
+
+
 			template <typename T2>
-			auto SubtractVector(const dmml::linalg::Vector<T2>* const v2) const {  
+			auto SubtractVector(const dmml::linalg::Vector<T2>* const v2) const {
 
 				using dervType = typename std::common_type<T, T2>::type;
 
@@ -211,10 +301,10 @@ namespace dmml {
 				catch (typename std::vector<T>::size_type) {
 					std::cout << "Vectors are of differing dimensions. Invoked vector of length " <<
 						this->GetSize() << " and passed vector of length " << v2->GetSize() << '.' << std::endl;
-					
+
 					return dmml::linalg::Vector<dervType>((dervType)1);
 				}
-	
+
 				typename std::vector<T>::const_iterator iOne = this->vec_m.cbegin();
 				auto v2Vec = v2->GetValues();
 				auto iTwo = v2Vec.cbegin();
@@ -229,14 +319,14 @@ namespace dmml {
 			}
 
 
-			template <typename V2> 
-			double DotProduct(const V2* const v2) const { 	
-								
-				try {	
+			template <typename V2>
+			double DotProduct(const V2* const v2) const {
+
+				try {
 					if (!is_Vector<std::decay_t<decltype(*v2)>, dmml::linalg::Vector>) { //almost uneccessary?
 						throw(typeid(v2).name());
 					}
-					
+
 					if (this->sizeType_m != v2->GetSize()) {
 						throw(this->GetSize());
 					}
@@ -248,7 +338,7 @@ namespace dmml {
 				catch (const typename std::vector<T>::size_type&) {
 					std::cout << "Vectors are of differing dimensions. Invoked vector of length " <<
 						this->GetSize() << " and passed vector of length " << v2->GetSize() << '.' << std::endl;
-					
+
 					return std::numeric_limits<double>::min();
 				}
 
@@ -285,7 +375,7 @@ namespace dmml {
 
 
 			template<typename T2>
-			auto HadamardProduct(const dmml::linalg::Vector<T2>*const v2) const {
+			auto HadamardProduct(const dmml::linalg::Vector<T2>* const v2) const {
 
 				using dervType = typename std::common_type<T, T2>::type;
 
@@ -310,7 +400,7 @@ namespace dmml {
 				typename std::vector<T>::const_iterator iOne = this->vec_m.cbegin();
 				auto v2Vals = v2->GetValues();
 				auto iTwo = v2Vals.cbegin();
-				auto retVec = dmml::linalg::Vector<dervType>();	
+				auto retVec = dmml::linalg::Vector<dervType>();
 
 				for (iOne; iOne != this->vec_m.cend(); iOne++) {
 					retVec.PushBack(*iOne * *iTwo);
@@ -321,7 +411,7 @@ namespace dmml {
 			}
 
 
-			dmml::linalg::Vector<double> ConvertUnitVector() const  {
+			dmml::linalg::Vector<double> ConvertUnitVector() const {
 				try {
 					if (this->GetSize() == 0) {
 						throw(this->GetSize());
@@ -334,7 +424,7 @@ namespace dmml {
 
 				double vecNorm = this->L2Norm();
 				auto retVec = dmml::linalg::Vector<double>();
-				
+
 				for (auto iter = this->vec_m.cbegin(); iter != this->vec_m.cend(); iter++) {
 					retVec.PushBack(static_cast<double>(*iter) / vecNorm);
 				}
@@ -347,7 +437,7 @@ namespace dmml {
 				try {
 					if (this->GetSize() == 0) {
 						throw(this->GetSize());
-					} 
+					}
 				}
 				catch (typename std::vector<T>::size_type) {
 					std::cout << "Vector of size 0." << std::endl;
@@ -361,8 +451,8 @@ namespace dmml {
 				unit.UpdateVectorSize();
 				return unit;
 			}
-	
-			
+
+
 			/*dmml::linalg::Vector<double> ConvertUnitVector_() {
 
 				return dmml::linalg::Vector<double>)();
@@ -378,11 +468,11 @@ namespace dmml {
 
 
 		private:
-	
+
 			//MEMBER VALUES
 			using valType_m = typename std::vector<T>::value_type;
-			typename std::vector<T>::size_type sizeType_m { 0 };
-			std::vector<T> vec_m {};
+			typename std::vector<T>::size_type sizeType_m{ 0 };
+			std::vector<T> vec_m{};
 
 
 			//SETTERS
@@ -397,10 +487,13 @@ namespace dmml {
 				else {
 					return false;
 				}
-			}*/	
+			}*/
 
 
 			//OPERATORS
+
+			
+
 
 		};
 
@@ -421,16 +514,16 @@ namespace dmml {
 			//in constructors check if T matches Ts
 			Matrix() {}
 
-			
+
 			Matrix(uint64_t rows, uint64_t cols)
 				:rowSize_m(static_cast<typename std::vector<T>::size_type>(rows)), colSize_m(static_cast<typename std::vector<T>::size_type>(cols)),
-				  matrix_m(std::vector<std::vector<T>>(rows, std::vector<T>(cols))) {}
-			
+				matrix_m(std::vector<std::vector<T>>(rows, std::vector<T>(cols))) {}
+
 
 			template <typename...Ts>
-			Matrix(uint64_t rows, uint64_t cols, Ts...args) 
-				:rowSize_m(static_cast<typename std::vector<T>::size_type>(rows)), colSize_m(static_cast<typename std::vector<T>::size_type>(cols)) {
-				
+			Matrix(uint64_t rows, uint64_t cols, Ts...args)
+				: rowSize_m(static_cast<typename std::vector<T>::size_type>(rows)), colSize_m(static_cast<typename std::vector<T>::size_type>(cols)) {
+
 				//check T vs Ts types
 				std::vector<T> initList = { { args... } }; //pack expansion but without copying the data?
 				/*for (auto iter : initList) {
@@ -454,11 +547,11 @@ namespace dmml {
 
 
 			//GETTERS
-			 typename std::vector<std::vector<T>> GetValues() const { return this->matrix_m; }
+			typename std::vector<std::vector<T>> GetValues() const { return this->matrix_m; }
 
-			 typename std::vector<std::vector<T>>::size_type GetRowSize() const { return this->rowSize_m; }
+			typename std::vector<std::vector<T>>::size_type GetRowSize() const { return this->rowSize_m; }
 
-			 typename std::vector<T>::size_type GetColSize() const { return this->colSize_m; }
+			typename std::vector<T>::size_type GetColSize() const { return this->colSize_m; }
 
 
 			void ShowMatrix() const { //CONVERT TO ITERATORS?
@@ -488,12 +581,12 @@ namespace dmml {
 
 			//MEMBERS
 			void Transpose() {
-				
+
 				auto retMat = std::vector<std::vector<T>>(this->colSize_m, std::vector<T>(this->rowSize_m));
 
 				for (uint64_t oldRow = 0; oldRow < this->rowSize_m; oldRow++) {
 					auto tempRow = this->matrix_m[oldRow];
-					
+
 					for (uint64_t newCol = 0; newCol < this->rowSize_m; newCol++) {
 						retMat[newCol][oldRow] = tempRow[newCol];
 					}
@@ -524,7 +617,7 @@ namespace dmml {
 					std::cout << "Matrices of differing sizes." << std::endl;
 					return dmml::linalg::Matrix<dervType>(1, 1, (dervType)1);
 				}
-				 
+
 				auto retMat = dmml::linalg::Matrix<dervType>(this->colSize_m, m2->GetRowSize());
 				auto m2Matrix = m2->GetValues();
 				dervType temp = 0;
@@ -543,7 +636,7 @@ namespace dmml {
 				}
 				return retMat;
 			}
-			
+
 
 			void MatMul_(const int64_t&& scalar) {
 
@@ -572,13 +665,13 @@ namespace dmml {
 
 			}
 
-			
+
 			void SingleValueDecomposition(const dmml::linalg::Matrix<T>* const matrix) const {
-				
+
 				//U - left singular vectors
 				//V - right singular vectors
 				//D - singular values
-				
+
 				//auto U =  
 
 			}
@@ -597,14 +690,14 @@ namespace dmml {
 
 
 			auto Determinant() {
-			
+
 				if (this->rowSize_m == this->colSize_m) {
 					_SquareDeterminant(this);
 				}
 				else {
 					_EigenDeterminant(this);
 				}
-			
+
 			}
 
 
@@ -614,13 +707,13 @@ namespace dmml {
 			//OPERATORS
 			//dmml::linalg::Matrix<T> operator= (const Matrix<T>& m) 
 
-				
+
 		private:
 
 			//MEMBER VALUES
-			typename std::vector<std::vector<T>>::size_type rowSize_m {};
-			typename std::vector<T>::size_type colSize_m {};
-			std::vector<std::vector<T>> matrix_m {};
+			typename std::vector<std::vector<T>>::size_type rowSize_m{};
+			typename std::vector<T>::size_type colSize_m{};
+			std::vector<std::vector<T>> matrix_m{};
 
 			//need destructor, copy constructor, and copy assignment operator
 
@@ -640,3 +733,5 @@ namespace dmml {
 		};
 	}
 }
+
+

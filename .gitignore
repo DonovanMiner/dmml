@@ -8,3 +8,10 @@
 /src/iterative/main.cpp
 /other_implements/first_imp.cpp
 /other_implements/first_imp.h
+/src/CUDA/.vs
+/src/CUDA/CUDA
+/src/CUDA/x64
+/src/CUDA/CUDA.sln
+/src/CUDA/CUDA.vcxproj
+/src/CUDA/vcxproj.user
+/src/CUDA/main.cu
