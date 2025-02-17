@@ -13,5 +13,5 @@
 /src/CUDA/x64
 /src/CUDA/CUDA.sln
 /src/CUDA/CUDA.vcxproj
-/src/CUDA/vcxproj.user
+/src/CUDA/CUDA.vcxproj.user
 /src/CUDA/main.cu
