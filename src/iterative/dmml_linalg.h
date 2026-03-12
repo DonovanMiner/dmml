@@ -648,7 +648,7 @@ namespace dmml {
 
 				for (std::size_t r = 0; r < this->rowSize_m; ++r) {
 					for (std::size_t c = 0; c < this->colSize_m; ++c) {
-						std::cout << std::fixed << std::setprecision(4) << (*this)(r, c) << ' ';
+						std::cout << std::fixed << std::setprecision(4) << (*this)(r, c) << "  ";
 					}
 					std::cout << '\n';
 				}
