@@ -5,9 +5,13 @@
 /DMML.vcxproj
 /DMML.vcxproj.filters
 /DMML.vcxproj.user
-/src/iterative/main.cpp
+/DMML.APS
+/imgui.ini
+
 /other_implements/first_imp.cpp
 /other_implements/first_imp.h
+
+/src/iterative/main.cpp
 /src/CUDA/.vs
 /src/CUDA/CUDA
 /src/CUDA/x64
@@ -15,3 +19,7 @@
 /src/CUDA/CUDA.vcxproj
 /src/CUDA/CUDA.vcxproj.user
 /src/CUDA/main.cu
+
+/dmml_viewer/assets
+/dmml_viewer/dmml_viewer_vulk*
+/dmml_viewer/ImGui/im_gui_impl_vulkan*
