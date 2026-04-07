@@ -5,6 +5,7 @@
 #include <type_traits>
 #include <exception>
 #include <algorithm>
+#include <thread>
 
 #include <cstdarg>
 #include <climits>
@@ -523,8 +524,8 @@ namespace dmml {
 		template <typename T>
 		class Matrix {
 		public:
-			template <typename V> friend class Matrix;
-			template <typename U> friend class Vector;
+			template <typename U> friend class Matrix;
+			template <typename V> friend class Vector;
 
 			//CONSTRUCTORS - need overloads for lvalue/rvalue args and vector list constructor
 			//in constructors check if T matches Ts
@@ -878,15 +879,18 @@ namespace dmml {
 				//dmml::linalg::Matrix<double> nextA(this->rowSize_m, this->colSize_m);
 				//nextA = *this - shift; 
 
-				dmml::linalg::Matrix<double> nextA(*this); //keep as double for now, consider common_type? (as above) 
+				dmml::linalg::Matrix<double> nextA(*this);
 				nextA -= shift;
 				//nextA.ShowMatrix();
 				auto QR = std::make_pair(dmml::linalg::Matrix<double>(this->rowSize_m, this->colSize_m), dmml::linalg::Matrix<double>(this->rowSize_m, this->colSize_m));
 				
 
-				while (std::abs(nextA(this->rowSize_m - 1, this->colSize_m - 2)) > epsilon) { //heuristic check, extend to all lower half values, or different single value?, also break after certain number of iters?
+				while (std::abs(nextA(this->rowSize_m - 1, this->colSize_m - 2)) > epsilon) { //heuristic check, extend to all lower half values, or different single value?
 					QR = nextA.QRDecomposition();
+					//QR.first.ShowMatrix();
+					//QR.second.ShowMatrix();
 					nextA = QR.second.MatMul(QR.first);
+					//nextA.ShowMatrix();
 				}
 				//nextA.ShowMatrix();
 				nextA += shift;

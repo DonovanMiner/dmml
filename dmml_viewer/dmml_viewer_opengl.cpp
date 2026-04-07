@@ -108,32 +108,6 @@ void dmml::viewer::dmml_viewer::InitImGuiContext() {
 }
 
 
-void dmml::viewer::dmml_viewer::InitOpenGL() {
-
-    /*glGenVertexArrays(1, &vertArray_m);
-    glBindVertexArray(vertArray_m);
-
-    glGenBuffers(1, &vertBuffer_m);
-    glBindBuffer(GL_ARRAY_BUFFER, vertBuffer_m);
-
-    float vertices[3 * 3] = {
-        -0.5f, -0.5f, 0.0f,
-        0.5f, -0.5f, 0.0f,
-        0.0f, 0.5f, 0.0f
-    };
-    
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, );
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 3, nullptr);
-
-    glGenBuffers(1, &idxBuffer_m);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, idxBuffer_m);
-    
-    unsigned int indices[3] = { 0, 1, 2 };
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);*/
-
-}
-
 
 
 
@@ -167,7 +141,7 @@ bool dmml::viewer::dmml_viewer::MainLoop() {
             SDL_Delay(10);
             continue;
         }
-
+       
 
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplSDL3_NewFrame();
@@ -204,6 +178,7 @@ bool dmml::viewer::dmml_viewer::MainLoop() {
         {
             ImGui::Begin("Another Window");   // Pass a pointer to our bool variable (the window will have a closing button that will clear the bool when clicked)
             ImGui::Text("Hello from another window!");
+            //ImGui::Image();
             ImGui::End();
         }   
 
