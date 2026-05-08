@@ -31,7 +31,7 @@
 
 
 //#include "dmml_render.h"
-#include <SDL3/SDL.h>
+#include <SDL3\SDL.h>
 #include <GL/glew.h>
 #include <SDL3/SDL_opengl.h>
 #include <GL/GL.h>
@@ -90,7 +90,7 @@ int main() {
 
 
 	unsigned int vertArray_m, vertBuffer_m, idxBuffer_m = 0;
-	/*glGenVertexArrays(1, &vertArray_m);
+	glGenVertexArrays(1, &vertArray_m);
 	glBindVertexArray(vertArray_m);
 
 	glGenBuffers(1, &vertBuffer_m);
@@ -110,7 +110,7 @@ int main() {
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, idxBuffer_m);
 
 	unsigned int indices[3] = { 0, 1, 2 };
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);*/
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
 
 
 

@@ -144,7 +144,6 @@ namespace dmml {
 
 			//OPERATORS
 			dmml::linalg::Vector<T>& operator=(const dmml::linalg::Vector<T>& copyFrom) {
-				std::cout << "Vector operator=\n";
 				this->sizeType_m = copyFrom.sizeType_m;
 				this->vec_m = copyFrom.vec_m;
 
@@ -535,9 +534,12 @@ namespace dmml {
 				:rowSize_m(rows), colSize_m(cols), numEle_m(rows * cols), matrix_m(std::vector<T>(rows * cols, 0)) { }
 
 
+			Matrix(std::size_t rows, std::size_t cols, T arg)
+				: rowSize_m(rows), colSize_m(cols), numEle_m(rows* cols), matrix_m(std::vector<T>(rows * cols, arg)) { }
+
 			template<typename ...Ts>
 			Matrix(std::size_t rows, std::size_t cols, Ts...args)
-				: rowSize_m(rows), colSize_m(cols), numEle_m(rows* cols), matrix_m{ static_cast<T>(args)... } { //for numEle_m, better to do mult or sizeof(args...)?
+				: rowSize_m(rows), colSize_m(cols), numEle_m(rows * cols), matrix_m{ static_cast<T>(args)... } { //for numEle_m, better to do mult or sizeof(args...)?
 			}
 
 
@@ -657,18 +659,62 @@ namespace dmml {
 
 
 			//SETTERS
-			void AssignElement(std::size_t row, std::size_t col, T val) {
+			void AssignElement(std::size_t& row, std::size_t& col, T& val) {
 				(*this)(row, col) = val;
 			}
 
 
-			void AddElement(T val, uint64_t row, uint64_t col) {
+			void AddElement(uint64_t& row, uint64_t& col, T& val) {
 				(*this)(row, col) += val;
 			}
 
 
-			void SubtractElement(T val, uint64_t row, uint64_t col) {
+			void SubtractElement(uint64_t& row, uint64_t& col, T& val) {
 				(*this)(row, col) -= val;
+			}
+
+
+			void AssignCol(std::size_t loc, dmml::linalg::Vector<T>& col) {
+				for (std::size_t r = 0; r < this->rowSize_m; ++r) {
+					this->matrix_m(r, loc) = col[r];
+				}
+			}
+
+
+			void AppendCol(dmml::linalg::Vector<T>& col) {
+				auto temp = dmml::linalg::Matrix(this->rowSize_m, this->colSize_m + 1);
+				//assign values
+
+			}
+
+
+			void SwapCol(const std::size_t& loc1, const std::size_t& loc2) {
+				for (std::size_t r = 0; r < this->rowSize_m; r++) {
+					auto temp = (*this)(r, loc1);
+					(*this)(r, loc1) = (*this)(r, loc2);
+					(*this)(r, loc2)  = temp;
+				}
+			}
+
+
+			void AssignRow(std::size_t loc, dmml::linalg::Vector<T>& row) {
+				for (std::size_t c = 0; c < this->colSize_m; ++c) {
+					this->matrix_m(loc, c) = row[c];
+				}
+			}
+
+
+			void AppendRow(dmml::linalg::Vector<T>& row) {
+				
+			}
+
+
+			void SwapRow(const std::size_t& loc1, const std::size_t& loc2) {
+				for (std::size_t c = 0; c < this->colSize_m; c++) {
+					auto temp = (*this)(loc1, c);
+					(*this)(loc1, c) = (*this)(loc2, c);
+					(*this)(loc2, c) = temp;
+				}
 			}
 
 
@@ -726,11 +772,11 @@ namespace dmml {
 						for (std::size_t jb = 0; jb < m2.colSize_m; jb += BLOCK_SIZE) {
 
 							const T* blockA = &(*this)(ib, kb);
-							const T* blockB = &(m2(kb, jb));
-							T* posC = &(retMat(ib, jb));
+							const T2* blockB = &(m2(kb, jb));
+							dervType* posC = &(retMat(ib, jb));
 
 							for (std::size_t i = 0; i < BLOCK_SIZE; ++i, posC += m2.colSize_m, blockA += this->colSize_m) { //convert to own func
-								const T* b = blockB;
+								const T2* b = blockB;
 								for (std::size_t k = 0; k < BLOCK_SIZE; ++k, b += m2.colSize_m) {
 									for (std::size_t j = 0; j < BLOCK_SIZE; ++j) {
 										posC[j] += blockA[k] * b[j];
@@ -763,7 +809,7 @@ namespace dmml {
 			//when chaining this with a constructor, is this constructing a nerw matrix, and destructing/replacing the matrix made by the class constructor?? INVESTIGATE
 			//make special constructor for identity matrix? way to make this faster?
 			//should return reference?
-			dmml::linalg::Matrix<T> IdentityMatrix(const uint64_t&& size) { //change type on identity matrix to be more flexible? template?
+			dmml::linalg::Matrix<T> IdentityMatrix(const uint64_t& size) { //change type on identity matrix to be more flexible? template?
 
 				//auto idMatrix = dmml::linalg::Matrix<T>(size, size);
 				for (std::size_t i = 0; i < this->colSize_m; ++i) {
@@ -813,6 +859,69 @@ namespace dmml {
 						
 				}
 				return 0.0;
+			}
+
+
+			dmml::linalg::Matrix<T> Elimination() {
+				//LU?
+				//check if pivot value is 0, need row exchange, add failure condition/message if all the pivot values for a col are 0
+
+				dmml::linalg::Matrix<T> A(*this);
+				//A(r, r) pivot val
+				for (std::size_t r = 0; r < this->rowSize_m; ++r) { //diag pivots
+					for (std::size_t r2 = r + 1; r2 < this->rowSize_m; ++r2) { //remaining vars in that col to be eliminated
+						T operVal = A(r2, r) / A(r, r); //get row modifying value
+						for (std::size_t c = 0; c < this->colSize_m; ++c) {
+							A(r2, c) -= operVal * A(r, c);
+						}
+					}
+				}
+				return A;
+			}
+
+
+			
+			std::pair<dmml::linalg::Matrix<T>, dmml::linalg::Vector<T>> Elimination(dmml::linalg::Vector<T>& b) {
+
+				dmml::linalg::Matrix<T> A(*this);
+				dmml::linalg::Vector<T> aug(b);
+				
+				for (std::size_t r = 0; r < this->rowSize_m; ++r) { 
+					for (std::size_t r2 = r + 1; r2 < this->rowSize_m; ++r2) {
+						T operVal = A(r2, r) / A(r, r);
+						for (std::size_t c = 0; c < this->colSize_m; ++c) {
+							A(r2, c) -= operVal * A(r, c);
+						}
+						aug.vec_m[r2] -= operVal * aug.vec_m[r];
+					}
+				}
+				return std::pair<dmml::linalg::Matrix<T>, dmml::linalg::Vector<T>>(A, aug);
+			}
+
+
+			dmml::linalg::Vector<T> SolveLinEq(dmml::linalg::Vector<T>& b) {
+				//back substitution, check sizes of this->matrix and b
+				dmml::linalg::Vector<T> sol(b);
+				for (std::size_t r = this->rowSize_m; r >= 1; --r) {
+					for (std::size_t pr = this->rowSize_m - 1; pr > r - 1; --pr) {
+						sol.vec_m[r - 1] -= (sol.vec_m[pr] * (*this)(r - 1, pr));
+					}
+					sol.vec_m[r - 1] = sol.vec_m[r - 1] / (*this)(r - 1, r - 1);
+				}
+
+				std::cout << "Solution to System of Linear Equations:\n";
+				for (std::size_t i = 0; i < sol.sizeType_m; i++) {
+					std::cout << 'x' << i + 1 << ": " << sol.vec_m[i] << '\n';
+				}
+
+				return sol;
+			}
+
+
+			dmml::linalg::Matrix<T> GJElimination() {
+
+				
+
 			}
 
 
@@ -868,7 +977,7 @@ namespace dmml {
 
 			//needs upper hesenberg transformation
 			//include deflation? checking for when certain values arent converging, check eigenvalues of submatrix/matrices, delfate, continue
-			dmml::linalg::Matrix<double> QRAlgorithm(const double&& epsilon) {
+			std::pair<dmml::linalg::Matrix<T>, dmml::linalg::Matrix<T>> QRAlgorithm(const double&& epsilon) {
 
 				//what is getting constructed/copied here? should DiagMatrix return a reference?
 				auto shift = dmml::linalg::Matrix<double>(this->rowSize_m, this->colSize_m).DiagMatrix((*this)(this->rowSize_m - 1, this->colSize_m - 1), this->rowSize_m, this->colSize_m); 
@@ -878,6 +987,7 @@ namespace dmml {
 				//dmml::linalg::Matrix<double> nextA(this->rowSize_m, this->colSize_m);
 				//nextA = *this - shift; 
 
+				auto eigVec = dmml::linalg::Matrix<double>(this->rowSize_m, this->colSize_m).IdentityMatrix(this->rowSize_m); //right size? always square?
 				dmml::linalg::Matrix<double> nextA(*this); //keep as double for now, consider common_type? (as above) 
 				nextA -= shift;
 				//nextA.ShowMatrix();
@@ -887,10 +997,11 @@ namespace dmml {
 				while (std::abs(nextA(this->rowSize_m - 1, this->colSize_m - 2)) > epsilon) { //heuristic check, extend to all lower half values, or different single value?, also break after certain number of iters?
 					QR = nextA.QRDecomposition();
 					nextA = QR.second.MatMul(QR.first);
+					eigVec = eigVec.MatMul(QR.first);
 				}
 				//nextA.ShowMatrix();
 				nextA += shift;
-				return nextA;
+				return std::pair<dmml::linalg::Matrix<double>, dmml::linalg::Matrix<double> >(nextA, eigVec);
 			}
 
 
