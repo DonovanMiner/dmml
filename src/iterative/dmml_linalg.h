@@ -12,11 +12,10 @@
 #include <cmath>
 
 #include <iostream>
-#include<iomanip>
-
-//adding exception class?
+#include <iomanip>
 
 
+//can prob get rid of this
 //callable type caster
 template <typename From, typename To>
 struct static_caster {
@@ -24,6 +23,7 @@ struct static_caster {
 };
 
 
+//can prob get rid of these
 //vector type check
 template<typename T, template<typename> typename V>
 bool is_Vector = std::false_type{};
@@ -40,62 +40,17 @@ template<template<typename> typename M, typename U>
 bool is_Matrix<M<U>, M> = std::true_type{};
 
 
-//--------------------MAKE GETTER MEMBER FUNCTIONS TO MAKE TEMPLATED CLASSES WORK ACROSS TYPES-----------------------
-//change/check decltypes of derived vectors/matrices (particularly for QR Decomp)
-//copy constructor for vectors and matrices
+//WORK ON DERIVED TYPES OR ENFORCING A STRICT RETURN TYPE
 // 
-//constructor for vector/matrix for single value to fill whole entity
-//std::common type for deriving types of vector/matrix operations
 //update try/catch type and size checks to some sort of function (may be unnecessary)
-
-
-
-
-
-//std::vector static allocator
-//template<typename T, const size_t MAX_SIZE>
-//class VectorStackCalloc {
+// 
+//PUT DERVIED TYPES IN VECTOR/MATRIX OPERATORS, NOT THE ADD/SUBTRACT FUNCTIONS (+= operators get dervied types, regular operators stay the same?)
 //
-//public:
-//	typedef T				  value_type;
-//	typedef value_type*       pointer;
-//	typedef const value_type* const_pointer;
-//	typedef value_type&		  reference;
-//	typedef const value_type& const_reference;
-//	typedef std::size_t		  size_type;
-//	typedef std::ptrdiff_t    difference_type;
+//ROW EXCHANGES IN ELIMINATION, LU DECOMP, NULL SPACE  
 //
+//standardize function arg orders for matrix class (val, row, col) so that col can default to row's value
 //
-//	/*enum {
-//		NUMBER_OF_BUFFERS
-//	};*/
-//
-//
-//	VectorCalloc() 
-//		: buffer_id(0) {}
-//
-//
-//	template<typename U>
-//	struct rebind {
-//		typedef VectorCalloc<U, MAX_SIZE> other;
-//	};
-//
-//
-//	
-//
-//
-//private:
-//
-//	int buffer_id;
-//
-//};
-
-
-
-
-
-
-
+//add derived types for elimination/gauss elim/solLinEq/and LU decomp
 
 
 
@@ -809,7 +764,7 @@ namespace dmml {
 			//when chaining this with a constructor, is this constructing a nerw matrix, and destructing/replacing the matrix made by the class constructor?? INVESTIGATE
 			//make special constructor for identity matrix? way to make this faster?
 			//should return reference?
-			dmml::linalg::Matrix<T> IdentityMatrix(const uint64_t& size) { //change type on identity matrix to be more flexible? template?
+			dmml::linalg::Matrix<T> IdentityMatrix(const uint64_t& size) {
 
 				//auto idMatrix = dmml::linalg::Matrix<T>(size, size);
 				for (std::size_t i = 0; i < this->colSize_m; ++i) {
@@ -902,11 +857,11 @@ namespace dmml {
 			dmml::linalg::Vector<T> SolveLinEq(dmml::linalg::Vector<T>& b) {
 				//back substitution, check sizes of this->matrix and b
 				dmml::linalg::Vector<T> sol(b);
-				for (std::size_t r = this->rowSize_m; r >= 1; --r) {
-					for (std::size_t pr = this->rowSize_m - 1; pr > r - 1; --pr) {
-						sol.vec_m[r - 1] -= (sol.vec_m[pr] * (*this)(r - 1, pr));
+				for (std::size_t r = this->rowSize_m; r-- > 0;) {
+					for (std::size_t pr = this->rowSize_m - 1; pr > r; --pr) {
+						sol.vec_m[r] -= (sol.vec_m[pr] * (*this)(r, pr));
 					}
-					sol.vec_m[r - 1] = sol.vec_m[r - 1] / (*this)(r - 1, r - 1);
+					sol.vec_m[r] = sol.vec_m[r] / (*this)(r, r);
 				}
 
 				std::cout << "Solution to System of Linear Equations:\n";
@@ -919,9 +874,55 @@ namespace dmml {
 
 
 			dmml::linalg::Matrix<T> GJElimination() {
+				//add derived type for I/operation values?
+				//eliminate down as normal, then go up, making sure pivots go to 1, then eliminate variables above to get ID from A, and inverse on I
+				auto I = dmml::linalg::Matrix<T>(this->rowSize_m, this->colSize_m).IdentityMatrix(this->rowSize_m);
+				dmml::linalg::Matrix<T> A(*this);
 
-				
+				for (std::size_t r = 0; r < this->rowSize_m; ++r) { //diag pivots
+					for (std::size_t r2 = r + 1; r2 < this->rowSize_m; ++r2) { //remaining vars in col to elim
+						T operVal = A(r2, r) / A(r, r);
+						for (std::size_t c = 0; c < this->colSize_m; ++c) { //actual elimination down the cols
+							A(r2, c) -= operVal * A(r, c);
+							I(r2, c) -= operVal * I(r, c);
+						}
+					}	
+				}
 
+				for (std::size_t r = this->rowSize_m; r-- > 0;) {
+					//go across pivot row, divide by pivot, pivot becomes 1, remaining vars eliminated on way up to make ID matrix
+					for (std::size_t remRow = r; remRow < this->colSize_m; ++remRow) {
+						A(r, remRow) /= A(r, r);
+					}
+					
+					for (std::size_t pr = r; pr-- > 0;) { //eliminate up
+						T operVal =  A(pr, r) / A(r, r);
+						for (std::size_t c = 0; c < this->colSize_m; ++c) {
+							A(pr, c) -= operVal * A(r, c);
+							I(pr, c) -= operVal * I(r, c);
+						}
+					}
+				}
+				return I;
+			}
+
+
+			std::pair<dmml::linalg::Matrix<T>, dmml::linalg::Matrix<T>> LUDecomp() {
+				//insert row exchanges
+				auto L = dmml::linalg::Matrix<T>(this->rowSize_m, this->colSize_m, 0).IdentityMatrix(this->rowSize_m);
+				auto U = *this;
+
+				for (std::size_t r = 0; r < this->rowSize_m; ++r) { //diag pivots
+					for (std::size_t r2 = r + 1; r2 < this->rowSize_m; ++r2) { //remaining vars in that col to be eliminated
+						T operVal = U(r2, r) / U(r, r); //get row modifying value
+						for (std::size_t c = 0; c < this->colSize_m; ++c) {
+							U(r2, c) -= operVal * U(r, c);
+						}
+						L(r2, r) = std::abs(operVal);
+					}
+				}
+
+				return std::pair<dmml::linalg::Matrix<T>, dmml::linalg::Matrix<T>>(L, U);
 			}
 
 
@@ -971,7 +972,7 @@ namespace dmml {
 					}
 				}
 				
-				return std::pair<dmml::linalg::Matrix<double>, dmml::linalg::Matrix<double> >(Q, R);
+				return std::pair<dmml::linalg::Matrix<double>, dmml::linalg::Matrix<double>>(Q, R);
 			}
 
 
@@ -990,14 +991,13 @@ namespace dmml {
 				auto eigVec = dmml::linalg::Matrix<double>(this->rowSize_m, this->colSize_m).IdentityMatrix(this->rowSize_m); //right size? always square?
 				dmml::linalg::Matrix<double> nextA(*this); //keep as double for now, consider common_type? (as above) 
 				nextA -= shift;
-				//nextA.ShowMatrix();
 				auto QR = std::make_pair(dmml::linalg::Matrix<double>(this->rowSize_m, this->colSize_m), dmml::linalg::Matrix<double>(this->rowSize_m, this->colSize_m));
 				
 
 				while (std::abs(nextA(this->rowSize_m - 1, this->colSize_m - 2)) > epsilon) { //heuristic check, extend to all lower half values, or different single value?, also break after certain number of iters?
 					QR = nextA.QRDecomposition();
 					nextA = QR.second.MatMul(QR.first);
-					eigVec = eigVec.MatMul(QR.first);
+					//eigVec = eigVec.MatMul(QR.first); //check if eigen vectors are correct, implement left/right eig vecs?
 				}
 				//nextA.ShowMatrix();
 				nextA += shift;
@@ -1044,17 +1044,11 @@ namespace dmml {
 			std::size_t numEle_m = 0;
 			std::vector<T> matrix_m {};
 
-			//need destructor, copy constructor, and copy assignment operator
-
-
-			//SETTERS
 			
+			void EliminationRowSwap_() {
 
+			}
 
-
-
-
-			//PRIVATE MEMBER FUNCS
 
 		};
 	}
