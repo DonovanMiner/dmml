@@ -674,7 +674,7 @@ namespace dmml {
 
 
 			//MEMBERS
-			void Transpose() {
+			void Transpose_() {
 
 				auto tpose = dmml::linalg::Matrix<T>(this->colSize_m, this->rowSize_m);
 				
@@ -689,6 +689,24 @@ namespace dmml {
 				this->rowSize_m ^= this->colSize_m;
 				
 				*this = tpose;
+			}
+
+
+			dmml::linalg::Matrix<T> Transpose() {
+				
+				auto tpose = dmml::linalg::Matrix<T>(this->colSize_m, this->rowSize_m);
+				
+				for (std::size_t r = 0; r < this->rowSize_m; ++r) {
+					for (std::size_t c = 0; c < this->colSize_m; ++c) {
+						tpose(c, r) = (*this)(r, c);
+					}
+				}
+
+				this->rowSize_m ^= this->colSize_m;
+				this->colSize_m ^= this->rowSize_m;
+				this->rowSize_m ^= this->colSize_m;
+
+				return tpose;
 			}
 
 
@@ -738,7 +756,6 @@ namespace dmml {
 									}
 								}
 							}
-
 						}
 					}
 				}
@@ -758,6 +775,20 @@ namespace dmml {
 			void MatMul_(const int64_t&& scalar) { //need matmul for vecotr/matrix multiplocations as well
 
 
+			}
+
+			template<typename T2>
+			dmml::linalg::Vector<T> MatMul(const dmml::linalg::Vector<T2>& v) {
+				//impl size check
+				using dervType = typename std::common_type<T, T2>::type;
+				dmml::linalg::Vector<dervType> retVec(this->colSize_m);
+
+				for (std::size_t matRow = 0; matRow < this->rowSize_m; ++matRow) {
+					for (std::size_t matCol = 0; matCol < this->colSize_m; ++matCol) {
+						retVec.vec_m[matRow] += ((*this)(matRow, matCol) * v.vec_m[matCol]);
+					}
+				}
+				return retVec;
 			}
 
 
@@ -836,7 +867,7 @@ namespace dmml {
 
 
 			
-			std::pair<dmml::linalg::Matrix<T>, dmml::linalg::Vector<T>> Elimination(dmml::linalg::Vector<T>& b) {
+			std::pair<dmml::linalg::Matrix<T>, dmml::linalg::Vector<T>> Elimination(const dmml::linalg::Vector<T>& b) {
 
 				dmml::linalg::Matrix<T> A(*this);
 				dmml::linalg::Vector<T> aug(b);
@@ -854,29 +885,32 @@ namespace dmml {
 			}
 
 
-			dmml::linalg::Vector<T> SolveLinEq(dmml::linalg::Vector<T>& b) {
+			dmml::linalg::Vector<T> SolveLinEq(const dmml::linalg::Vector<T>& b) {
 				//back substitution, check sizes of this->matrix and b
-				dmml::linalg::Vector<T> sol(b);
+
+				auto sys = this->Elimination(b);
+				//dmml::linalg::Vector<T> sol(b);
+				
 				for (std::size_t r = this->rowSize_m; r-- > 0;) {
 					for (std::size_t pr = this->rowSize_m - 1; pr > r; --pr) {
-						sol.vec_m[r] -= (sol.vec_m[pr] * (*this)(r, pr));
+						sys.second.vec_m[r] -= (sys.second.vec_m[pr] * sys.first(r, pr));
 					}
-					sol.vec_m[r] = sol.vec_m[r] / (*this)(r, r);
+					sys.second.vec_m[r] = sys.second.vec_m[r] / sys.first(r, r);
 				}
 
 				std::cout << "Solution to System of Linear Equations:\n";
-				for (std::size_t i = 0; i < sol.sizeType_m; i++) {
-					std::cout << 'x' << i + 1 << ": " << sol.vec_m[i] << '\n';
+				for (std::size_t i = 0; i < sys.second.sizeType_m; i++) {
+					std::cout << 'x' << i + 1 << ": " << sys.second.vec_m[i] << '\n';
 				}
 
-				return sol;
+				return sys.second;
 			}
 
 
 			dmml::linalg::Matrix<T> GJElimination() {
 				//add derived type for I/operation values?
 				//eliminate down as normal, then go up, making sure pivots go to 1, then eliminate variables above to get ID from A, and inverse on I
-				auto I = dmml::linalg::Matrix<T>(this->rowSize_m, this->colSize_m).IdentityMatrix(this->rowSize_m);
+				dmml::linalg::Matrix<T> I = dmml::linalg::Matrix<T>(this->rowSize_m, this->colSize_m).IdentityMatrix(this->rowSize_m);
 				dmml::linalg::Matrix<T> A(*this);
 
 				for (std::size_t r = 0; r < this->rowSize_m; ++r) { //diag pivots
@@ -888,18 +922,19 @@ namespace dmml {
 						}
 					}	
 				}
-
+				//change order of eliminating vars/switching pivot to 1
 				for (std::size_t r = this->rowSize_m; r-- > 0;) {
 					//go across pivot row, divide by pivot, pivot becomes 1, remaining vars eliminated on way up to make ID matrix
-					for (std::size_t remRow = r; remRow < this->colSize_m; ++remRow) {
-						A(r, remRow) /= A(r, r);
+					T operVal = (1 / A(r, r));
+					for (std::size_t remRow = 0; remRow < this->colSize_m; ++remRow) {
+						I(r, remRow) *= operVal;
+						A(r, remRow) *= operVal;
 					}
-					
 					for (std::size_t pr = r; pr-- > 0;) { //eliminate up
 						T operVal =  A(pr, r) / A(r, r);
 						for (std::size_t c = 0; c < this->colSize_m; ++c) {
-							A(pr, c) -= operVal * A(r, c);
 							I(pr, c) -= operVal * I(r, c);
+							A(pr, c) -= operVal * A(r, c);
 						}
 					}
 				}
@@ -997,7 +1032,7 @@ namespace dmml {
 				while (std::abs(nextA(this->rowSize_m - 1, this->colSize_m - 2)) > epsilon) { //heuristic check, extend to all lower half values, or different single value?, also break after certain number of iters?
 					QR = nextA.QRDecomposition();
 					nextA = QR.second.MatMul(QR.first);
-					//eigVec = eigVec.MatMul(QR.first); //check if eigen vectors are correct, implement left/right eig vecs?
+					eigVec = eigVec.MatMul(QR.first); //check if eigen vectors are correct, implement left/right eig vecs?
 				}
 				//nextA.ShowMatrix();
 				nextA += shift;
@@ -1045,7 +1080,7 @@ namespace dmml {
 			std::vector<T> matrix_m {};
 
 			
-			void EliminationRowSwap_() {
+			void _EliminationRowSwap() {
 
 			}
 
