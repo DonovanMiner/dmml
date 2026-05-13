@@ -22,4 +22,4 @@
 
 /dmml_viewer/assets
 /dmml_viewer/dmml_viewer_vulk*
-/dmml_viewer/ImGui/im_gui_impl_vulkan*
+/dmml_viewer/ImGui/imgui_impl_vulkan*
