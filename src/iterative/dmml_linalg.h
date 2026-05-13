@@ -855,6 +855,8 @@ namespace dmml {
 				dmml::linalg::Matrix<T> A(*this);
 				//A(r, r) pivot val
 				for (std::size_t r = 0; r < this->rowSize_m; ++r) { //diag pivots
+					//if A(r, r) (the pivot value) == 0, _EliminationRowSwap, how to restart the process w/o recursion?
+					//keep track of previous matrix, send that to function, swap rows, then continue process?
 					for (std::size_t r2 = r + 1; r2 < this->rowSize_m; ++r2) { //remaining vars in that col to be eliminated
 						T operVal = A(r2, r) / A(r, r); //get row modifying value
 						for (std::size_t c = 0; c < this->colSize_m; ++c) {
@@ -904,6 +906,18 @@ namespace dmml {
 				}
 
 				return sys.second;
+			}
+
+
+			dmml::linalg::Matrix<T> SolveNullSpace() {
+				//soln in form of [-F  where -F is free column values, I is ID matrix
+				//				    N]
+				//get to rref first
+				//put it into [I F] form, swap columns around to do so, make sure to swap variables around as well to match column swaps, 
+				// then stick I under -F to get [-F
+				//								  I] and these are the solns
+
+			
 			}
 
 
@@ -1043,7 +1057,7 @@ namespace dmml {
 
 		
 			
-			void SingularValueDecomposition(const dmml::linalg::Matrix<T>* const matrix) const {
+			void SingularValueDecomposition(const dmml::linalg::Matrix<T>* const matrix) {
 				
 				//U - left singular vectors
 				//V - right singular vectors
@@ -1054,7 +1068,7 @@ namespace dmml {
 			}
 
 
-			dmml::linalg::Matrix<T> MoorePenrosePseudoInverse() const {
+			dmml::linalg::Matrix<T> MoorePenrosePseudoInverse() {
 
 				SingleValueDecomposition(this);
 				//single value decomposition
@@ -1080,8 +1094,11 @@ namespace dmml {
 			std::vector<T> matrix_m {};
 
 			
-			void _EliminationRowSwap() {
+			void _EliminationRowSwap(dmml::linalg::Matrix<T>& A, const std::size_t& currRow) {
 
+				//start at current row 
+
+				return A;
 			}
 
 
