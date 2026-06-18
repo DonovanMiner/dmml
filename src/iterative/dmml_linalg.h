@@ -5,6 +5,7 @@
 #include <type_traits>
 #include <exception>
 #include <algorithm>
+#include <numeric>
 
 #include <cstdarg>
 #include <climits>
@@ -39,18 +40,25 @@ bool is_Matrix = std::false_type{};
 template<template<typename> typename M, typename U>
 bool is_Matrix<M<U>, M> = std::true_type{};
 
-
+//---------------------------------------------HOUSEKEEPING---------------------------------------------
 //WORK ON DERIVED TYPES OR ENFORCING A STRICT RETURN TYPE
 // 
 //update try/catch type and size checks to some sort of function (may be unnecessary)
 // 
 //PUT DERVIED TYPES IN VECTOR/MATRIX OPERATORS, NOT THE ADD/SUBTRACT FUNCTIONS (+= operators get dervied types, regular operators stay the same?)
-//
-//ROW EXCHANGES IN ELIMINATION, LU DECOMP, NULL SPACE  
-//
+// 
 //standardize function arg orders for matrix class (val, row, col) so that col can default to row's value
 //
 //add derived types for elimination/gauss elim/solLinEq/and LU decomp
+// 
+//--------------------------------------------FUNCTIONALITY--------------------------------------------
+//ROW EXCHANGES IN ELIMINATION/NULL SPACE(?)
+// 
+//(IN ELIMINATION FUNCTIONS) check if pivot value is 0, need row exchange, add failure condition/message if all the pivot values for a col are 0
+//
+//BEST WAY TO COMPARE FLAOTS TO ZERO?
+//MODIFY OTHER ELIMINATION METHODS WITH colDummy VARIABLE USED IN NullSpaceElimination() to work better with non-square matrices? (prob not neccessary, check conditions)
+
 
 
 
@@ -163,7 +171,6 @@ namespace dmml {
 
 			template<typename T2>
 			auto operator*(const T2& scalar) {
-				std::cout << "Operator*\n";
 				auto retVec(*this);
 				for (std::size_t i = 0; i != this->sizeType_m; ++i) {
 					retVec.vec_m[i] *= scalar;
@@ -849,8 +856,6 @@ namespace dmml {
 
 
 			dmml::linalg::Matrix<T> Elimination() {
-				//LU?
-				//check if pivot value is 0, need row exchange, add failure condition/message if all the pivot values for a col are 0
 
 				dmml::linalg::Matrix<T> A(*this);
 				//A(r, r) pivot val
@@ -909,15 +914,132 @@ namespace dmml {
 			}
 
 
+			dmml::linalg::Matrix<T> NullSpaceElimination() {
+
+				dmml::linalg::Matrix<T> A(*this);
+				std::vector<std::pair<std::size_t, std::size_t>> pivots = {}; //store pivot locations here, iterate back through them to get to rref
+
+				std::size_t colDummy = 0; //check size of colDummy to ensure it doesnt exceed size of matrix
+				for (std::size_t r = 0; r < this->rowSize_m; ++r) {
+					if (colDummy == this->colSize_m) { //better way to write function to avoid this if statement?
+						std::cout << "Col size reached, break point" << std::endl;
+						break;
+					}
+
+					if ( (A(r, colDummy) == 0) && (A._PivotColCheck(r, colDummy)) ) { //FLOAT CHECK?-----
+						--r;
+						++colDummy;
+						continue; //if current pivot is 0, and all remaining values in the column are 0 as well, free col, leave as is. continue eliminating at next available pivot
+						//if there is a pivot need row swap?
+					}
+
+					
+					pivots.emplace_back(std::make_pair(r, colDummy));
+					for (std::size_t r2 = r + 1; r2 < this->rowSize_m; ++r2) {
+						T operVal = A(r2, colDummy) / A(r, colDummy);
+						for (std::size_t c = 0; c < this->colSize_m; ++c) {
+							A(r2, c) -= operVal * A(r, c);
+						}
+					}
+					++colDummy;
+				}
+
+
+				//iterate back through pivots
+				for (auto piv = pivots.crbegin(); piv != pivots.crend(); ++piv) {
+					T operVal = A(piv->first, piv->second);
+					for (std::size_t c = 0; c < this->colSize_m; ++c) { //norm row, piv value becomes 1
+						A(piv->first, c) /= operVal;
+					}
+					
+					for (std::size_t r = piv->first; r-- > 0;) { //eliminate up
+						operVal = A(r, piv->second) / A(piv->first, piv->second);
+						for (std::size_t c = 0; c < this->colSize_m; ++c) {
+							A(r, c) -= operVal * A(piv->first, c);
+						}
+					}
+				}
+
+				return A;
+			}
+
+
+			//need to cut out/stop iterating on zero-valued rows
 			dmml::linalg::Matrix<T> SolveNullSpace() {
 				//soln in form of [-F  where -F is free column values, I is ID matrix
-				//				    N]
+				//				    I]
 				//get to rref first
 				//put it into [I F] form, swap columns around to do so, make sure to swap variables around as well to match column swaps, 
 				// then stick I under -F to get [-F
 				//								  I] and these are the solns
 
-			
+				dmml::linalg::Matrix<T> sys = this->NullSpaceElimination();
+				
+				std::vector<std::size_t> idx(this->colSize_m); //need to track col swaps to ensure sols stay aligned with their vars, track indexes of swaps here. idx[i] = location of solution/associated x variable
+				std::iota(idx.begin(), idx.end(), 0);
+
+				uint64_t rank = 0;
+				//NEED BETTER PROCESS FOR LOOKING FOR ID MATRIX, CHECK BY COLS?
+				//go by cols, col 0 needs 1 in 0 indx, etc.
+				for (std::size_t c = 0; c < sys.colSize_m; ++c) {
+					//std::cout << "Col: " << c << std::endl;
+					uint64_t ones = 0;
+					uint64_t otherVals = 0;
+					bool inPlace = false;
+					std::size_t oneLoc = 0;
+
+					for (std::size_t r = 0; r < sys.rowSize_m; ++r) {
+						//std::cout << "Row: " << r << std::endl;
+						if ((sys(r, c) == 1) && (r == c)) {
+							inPlace = true;
+							++ones;
+						}
+						else if ((sys(r, c) == 1) && (r != c)) {
+							oneLoc = r;
+							++ones;
+						}
+						else if (sys(r, c) > 1) {
+							++otherVals;
+						}
+					}
+
+					if (ones == 1 && otherVals == 0 && !inPlace) {
+						//std::cout << "cond1\n";
+						sys.SwapCol(oneLoc, c);
+						std::swap(idx[oneLoc], idx[c]);
+						++rank;
+					}
+					else if (ones == 1 && otherVals == 0 && inPlace) {
+						//std::cout << "cond2\n";
+						++rank;
+					}
+				}
+				
+				//can maybe put this and following loop into a singular loop but this seems to be most robust
+				dmml::linalg::Matrix<T> sol(sys.colSize_m, sys.colSize_m - rank);
+				
+				//place F into solution
+				for (std::size_t r = 0; r < rank; ++r) {
+					for (std::size_t c = rank; c < sys.colSize_m; ++c) {
+						sol(r, c - rank) = -sys(r, c);
+					}
+				}
+				//place I into solution
+				for (std::size_t r = 0; r < sol.rowSize_m - rank; ++r) {
+					for (std::size_t c = 0; c < sol.colSize_m; ++c) {
+						sol(r + rank, c) = sys(r, c);
+					}
+				}
+				
+				//put back into correct order with idx vector
+				for (std::size_t iter = 0; iter < idx.size(); ++iter) {
+					if (iter != idx[iter]) {
+						sol.SwapRow(iter, idx[iter]);
+						std::swap(idx[iter], idx[idx[iter]]);
+					}
+				}
+
+				return sol;
 			}
 
 
@@ -936,7 +1058,7 @@ namespace dmml {
 						}
 					}	
 				}
-				//change order of eliminating vars/switching pivot to 1
+				//change order of eliminating vars/get pivot to a value of 1
 				for (std::size_t r = this->rowSize_m; r-- > 0;) {
 					//go across pivot row, divide by pivot, pivot becomes 1, remaining vars eliminated on way up to make ID matrix
 					T operVal = (1 / A(r, r));
@@ -944,7 +1066,7 @@ namespace dmml {
 						I(r, remRow) *= operVal;
 						A(r, remRow) *= operVal;
 					}
-					for (std::size_t pr = r; pr-- > 0;) { //eliminate up
+					for (std::size_t pr = r; pr-- > 0;) {
 						T operVal =  A(pr, r) / A(r, r);
 						for (std::size_t c = 0; c < this->colSize_m; ++c) {
 							I(pr, c) -= operVal * I(r, c);
@@ -1099,6 +1221,17 @@ namespace dmml {
 				//start at current row 
 
 				return A;
+			}
+
+
+			bool _PivotColCheck(const std::size_t currRow, const std::size_t currCol) const {
+				
+				for (std::size_t r = currRow + 1; r < this->rowSize_m; ++r) {
+					if ( (*this)(r, currCol) != 0)
+						return 0;
+				}
+				
+				return 1;
 			}
 
 
